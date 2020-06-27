@@ -12,17 +12,23 @@ inherit
 	SHARED_ERROR
 
 create
-	make
+	make,
+	make_sendmail
 
 feature {NONE} -- Initialization
 
 	make (a_smtp_server: READABLE_STRING_32)
-			-- Create an instance of {ESA_EMAIL_SERVICE} with an smtp_server `a_smtp_server'.
+			-- Create an instance of {ESA_NOTIFICATION_EMAIL_SERVICE} with an smtp_server `a_smtp_server'.
 			-- Using "noreplies@eiffel.com" as admin email.
-		local
 		do
 					-- Get local host name needed in creation of SMTP_PROTOCOL.
-			create {NOTIFICATION_SMTP_MAILER} smtp_protocol.make (a_smtp_server.to_string_8)
+			create {NOTIFICATION_SMTP_MAILER} mailer.make (a_smtp_server.to_string_8)
+			set_successful
+		end
+
+	make_sendmail
+		do
+			create {NOTIFICATION_SENDMAIL_MAILER} mailer
 			set_successful
 		end
 
@@ -38,8 +44,8 @@ feature {NONE} -- Initialization
 			Result := "webmaster@eiffel.com"
 		end
 
-	smtp_protocol: NOTIFICATION_MAILER
-			-- SMTP protocol.
+	mailer: NOTIFICATION_MAILER
+			-- Mailer.
 
 feature -- Basic Operations
 
@@ -77,7 +83,7 @@ feature -- Basic Operations
 				l_content.append (Disclaimer)
 					-- Create our message.
 				create l_email.make (admin_email, a_to, "Eiffel Support Site: Account Activation", l_content)
-				smtp_protocol.safe_process_email (l_email)
+				mailer.safe_process_email (l_email)
 			end
 		end
 
@@ -106,7 +112,7 @@ feature -- Basic Operations
 
 				-- Create our message.
 			create l_email.make (admin_email, a_new_email, "Eiffel Support Site: Email Activation", l_message)
-			smtp_protocol.safe_process_email (l_email)
+			mailer.safe_process_email (l_email)
 		end
 
 	send_new_email_confirmed_email (a_old_email, a_new_email: STRING)
@@ -134,7 +140,7 @@ feature -- Basic Operations
 				create l_email.make (admin_email, a_to, "Eiffel Support Site: Password Reset" , a_message)
 				l_email.add_header_line ("MIME-Version: 1.0")
 				l_email.add_header_line ("Content-Type: text/plain; charset=UTF-8")
-				smtp_protocol.safe_process_email (l_email)
+				mailer.safe_process_email (l_email)
 			end
 		end
 
@@ -155,7 +161,7 @@ feature -- Basic Operations
 				end
 				l_email.add_header_line ("MIME-Version: 1.0")
 				l_email.add_header_line ("Content-Type: text/plain; charset=UTF-8")
-				smtp_protocol.safe_process_email (l_email)
+				mailer.safe_process_email (l_email)
 			else
 				log.write_error (generator + ".send_new_report_email " + a_report.number.out + " " + last_error_message)
 			end
@@ -187,6 +193,8 @@ feature -- Basic Operations
 						create l_email.make (user_mail (a_user.displayed_name), ll_email, report_email_subject (a_report, l_interactions.count), l_message)
 
 					end
+					l_email.add_header_line ("MIME-Version: 1.0")
+					l_email.add_header_line ("Content-Type: text/plain; charset=UTF-8")
 
 					if not a_subscribers.is_empty then
 						create  l_etable.make_caseless (2)
@@ -198,7 +206,7 @@ feature -- Basic Operations
 							l_email.add_bcc_address (ic.item)
 						end
 					end
-					smtp_protocol.safe_process_email (l_email)
+					mailer.safe_process_email (l_email)
 				else
 					log.write_error (generator + ".send_new_interaction_email " + a_report.number.out + " " + last_error_message)
 				end
@@ -224,7 +232,7 @@ feature -- Basic Operations
 				l_content.append ( report_email_links (a_url + "/report_detail", a_report.number))
 
 				create l_email.make (user_mail (a_user.displayed_name), ll_email, report_email_subject (a_report, 0), l_content)
-				smtp_protocol.safe_process_email (l_email)
+				mailer.safe_process_email (l_email)
 			else
 				log.write_error (generator + ".send_responsible_change_email " + a_report.number.out + " " + last_error_message)
 			end
@@ -240,7 +248,7 @@ feature -- Basic Operations
 			l_content.append (a_message.as_string_32)
 
 			create l_email.make (admin_email, webmaster_email, "ESA API exception", l_content)
-			smtp_protocol.safe_process_email (l_email)
+			mailer.safe_process_email (l_email)
 		end
 
 feature {NONE} -- Implementation
@@ -257,6 +265,9 @@ feature {NONE} -- Implementation
 
 	report_email_subject (a_report: REPORT; a_interactions_count: INTEGER): STRING
 			-- Subject of email related to report `a_report'
+		local
+			utf_encoder: UTF_CONVERTER
+			base64: BASE64
 		do
 			create Result.make (1024)
 			Result.append_character ('[')
@@ -270,7 +281,15 @@ feature {NONE} -- Implementation
 				Result.append_integer (a_interactions_count)
 			end
 			Result.append ("] ")
-			Result.append (a_report.synopsis.to_string_8)
+			if a_report.synopsis.is_valid_as_string_8 then
+				Result.append (a_report.synopsis.to_string_8)
+			else
+				create base64
+				Result.append ("=?utf-8?B?")
+				Result.append (base64.encoded_string (utf_encoder.string_32_to_utf_8_string_8 (a_report.synopsis)))
+				Result.append ("?=")
+			end
+
 		end
 
 	recipients_to_array (a_recipients: LIST [STRING]; a_emails: STRING_TABLE[STRING]): ARRAY [STRING]
@@ -390,6 +409,8 @@ feature {NONE} -- Implementation
 
 	new_interaction_email_message (a_user: USER_INFORMATION; a_report_interaction: REPORT_INTERACTION; a_report: REPORT; a_old_report: REPORT; a_url: STRING): STRING
 			-- New interaction message.
+		local
+			utf: UTF_CONVERTER
 		do
 			create Result.make (4096)
 
@@ -417,7 +438,7 @@ feature {NONE} -- Implementation
 			end
 
 			if attached a_report_interaction.content as l_content then
-				Result.append ((create{UTF8_ENCODER}).decoded_string (l_content.to_string_8))
+				utf.escaped_utf_32_string_into_utf_8_string_8 (l_content, Result)
 				Result.append ("%N%N")
 			end
 

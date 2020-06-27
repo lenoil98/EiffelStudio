@@ -26,6 +26,12 @@ feature -- Status report
 		deferred
 		end
 
+feature -- Debug purpose
+
+	is_debug_enabled: BOOLEAN
+		deferred
+		end
+
 feature -- Access
 
 	server_url: READABLE_STRING_8
@@ -53,6 +59,11 @@ feature -- Access
 		deferred
 		end
 
+	active_session: detachable ES_ACCOUNT_SESSION
+			-- Active session, if logged in, otherwise Void.
+		deferred
+		end
+
 	installation: ES_ACCOUNT_INSTALLATION
 			-- Current installation.
 		deferred
@@ -65,6 +76,11 @@ feature -- Access
 
 	guest_mode_loging_count: INTEGER
 			-- Number of loging as guest.
+		deferred
+		end
+
+	session_heartbeat: NATURAL_32
+			-- Delay between two session ping (heartbeat), in seconds.
 		deferred
 		end
 
@@ -90,9 +106,41 @@ feature -- Sign in
 		deferred
 		end
 
+	quit
+		-- Quit session (could be quit EiffelStudio).
+		deferred
+		end
+
 feature -- Update
 
-	ping_installation (a_account: ES_ACCOUNT)
+	resume_active_session
+		do
+			if attached active_session as sess then
+				resume_session (sess.account, sess)
+			end
+		end
+
+	async_ping_installation (a_account: ES_ACCOUNT; a_session: ES_ACCOUNT_SESSION)
+		deferred
+		end
+
+	ping_installation (a_account: ES_ACCOUNT; a_session: ES_ACCOUNT_SESSION)
+		deferred
+		end
+
+	end_session (a_account: ES_ACCOUNT; a_session: ES_ACCOUNT_SESSION)
+		deferred
+		end
+
+	pause_session (a_account: ES_ACCOUNT; a_session: ES_ACCOUNT_SESSION)
+		deferred
+		end
+
+	resume_session (a_account: ES_ACCOUNT; a_session: ES_ACCOUNT_SESSION)
+		deferred
+		end
+
+	update_session (sess: ES_ACCOUNT_SESSION)
 		deferred
 		end
 
@@ -129,6 +177,29 @@ feature -- Connection checking
 		end
 
 feature -- Events
+
+	on_session_state_changed (sess: ES_ACCOUNT_SESSION)
+		do
+			update_session (sess)
+			if attached observers as lst then
+				across
+					lst as ic
+				loop
+					ic.item.on_session_state_changed (sess)
+				end
+			end
+		end
+
+	on_session_heartbeat_updated (a_heartbeat: NATURAL)
+		do
+			if attached observers as lst then
+				across
+					lst as ic
+				loop
+					ic.item.on_session_heartbeat_updated (a_heartbeat)
+				end
+			end
+		end
 
 	on_cloud_available (a_is_connected: BOOLEAN)
 		do
@@ -209,7 +280,7 @@ feature {NONE} -- Implementation
 invariant
 
 note
-	copyright: "Copyright (c) 1984-2017, Eiffel Software"
+	copyright: "Copyright (c) 1984-2019, Eiffel Software"
 	license: "GPL version 2 (see http://www.eiffel.com/licensing/gpl.txt)"
 	licensing_options: "http://www.eiffel.com/licensing"
 	copying: "[

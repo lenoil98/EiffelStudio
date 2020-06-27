@@ -133,6 +133,7 @@ feature -- Command
 			l_editor_cut_cmd: EB_EDITOR_CUT_COMMAND
 			l_editor_copy_cmd: EB_EDITOR_COPY_COMMAND
 			l_editor_paste_cmd: EB_EDITOR_PASTE_COMMAND
+			l_editor_insert_symbol_cmd: EB_INSERT_SYMBOL_EDITOR_COMMAND
 			l_new_cluster_cmd: EB_NEW_CLUSTER_COMMAND
 			l_new_library_cmd: EB_NEW_LIBRARY_COMMAND
 			l_new_assembly_cmd: EB_NEW_ASSEMBLY_COMMAND
@@ -273,6 +274,11 @@ feature -- Command
 			auto_recycle (l_editor_paste_cmd)
 			l_dev_commands.set_editor_paste_cmd (l_editor_paste_cmd)
 			l_dev_commands.toolbarable_commands.extend (l_editor_paste_cmd)
+
+			create l_editor_insert_symbol_cmd.make (develop_window)
+			auto_recycle (l_editor_insert_symbol_cmd)
+			l_dev_commands.set_editor_insert_symbol_cmd (l_editor_insert_symbol_cmd)
+			l_dev_commands.toolbarable_commands.extend (l_editor_insert_symbol_cmd)
 
 			create l_new_cluster_cmd.make (develop_window, False)
 			auto_recycle (l_new_cluster_cmd)
@@ -814,7 +820,8 @@ feature -- Command
 			l_window.set_icon_pixmap (develop_window.pixmap)
 
 			register_action (l_window.resize_actions, agent (x,y,w,h: INTEGER) do develop_window.save_size end)
-			register_action (l_window.dpi_changed_actions, agent (dpi,x,y,w,h: INTEGER) do develop_window.save_size_and_dpi end)
+			register_action (l_window.dpi_changed_actions, agent (dpi: INTEGER; x,y,w,h: INTEGER) do develop_window.update_dpi (dpi) end)
+			register_action (l_window.dpi_changed_actions, agent (dpi: INTEGER; x,y,w,h: INTEGER) do develop_window.save_size_and_dpi end)
 			register_action (l_window.move_actions, agent (x,y,w,h: INTEGER) do develop_window.save_position end)
 
 				-- Initialize commands and connect them.
@@ -1117,7 +1124,7 @@ feature{NONE} -- Implementation
 		end
 
 note
-	copyright: "Copyright (c) 1984-2018, Eiffel Software"
+	copyright: "Copyright (c) 1984-2019, Eiffel Software"
 	license:   "GPL version 2 (see http://www.eiffel.com/licensing/gpl.txt)"
 	licensing_options: "http://www.eiffel.com/licensing"
 	copying: "[

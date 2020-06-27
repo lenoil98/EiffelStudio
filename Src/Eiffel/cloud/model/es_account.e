@@ -27,8 +27,6 @@ feature -- Access
 
 	plan: detachable ES_ACCOUNT_PLAN
 
-	installation: detachable ES_ACCOUNT_INSTALLATION
-
 feature -- Status report
 
 	is_expired: BOOLEAN
@@ -57,11 +55,6 @@ feature -- Element change
 			plan := a_plan
 		end
 
-	set_installation (a_inst: like installation)
-		do
-			installation := a_inst
-		end
-
 feature -- Comparison
 
 	same_as	(other: detachable ES_ACCOUNT): BOOLEAN
@@ -72,7 +65,7 @@ feature -- Comparison
 		end
 
 ;note
-	copyright: "Copyright (c) 1984-2017, Eiffel Software"
+	copyright: "Copyright (c) 1984-2019, Eiffel Software"
 	license: "GPL version 2 (see http://www.eiffel.com/licensing/gpl.txt)"
 	licensing_options: "http://www.eiffel.com/licensing"
 	copying: "[

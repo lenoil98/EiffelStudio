@@ -2589,7 +2589,6 @@ feature {NONE} -- Visitor
 			l_is_string_32: BOOLEAN
 			l_value: detachable STRING
 			class_id: INTEGER
-			ci: detachable CLASS_I
 			s8, s32: detachable CLASS_C
 			t8, t32: detachable TYPE_A
 			l_is_immutable: BOOLEAN
@@ -5833,11 +5832,6 @@ feature {NONE} -- Visitor
 			end
 		end
 
-	process_infix_prefix_as (l_as: INFIX_PREFIX_AS)
-		do
-			-- Nothing to be done
-		end
-
 	process_feat_name_id_as (l_as: FEAT_NAME_ID_AS)
 		do
 			-- Nothing to be done
@@ -7142,7 +7136,7 @@ feature {NONE} -- Visitor
 
 			if error_level = l_error_level then
 					-- Update expression type.
-				last_type := l_expression_type
+				set_type (l_expression_type, l_as)
 			else
 				reset_types
 			end
@@ -9488,7 +9482,6 @@ feature {NONE} -- Implementation
 			l_context_current_class: CLASS_C
 			l_vwoe: VWOE
 			l_result_tuple: TUPLE[feature_item: FEATURE_I; class_type_of_feature: CL_TYPE_A; features_found_count: INTEGER]
-			l_formal: FORMAL_A
 			l_is_multi_constraint_case: BOOLEAN
 			l_feature_found_count: INTEGER
 			l_vtmc_error: VTMC
@@ -9500,28 +9493,32 @@ feature {NONE} -- Implementation
 				-- No need for `a_left_type.actual_type' since it is done in callers of
 				-- `is_infix_valid'.
 			if a_left_type.is_formal  then
-				l_formal ?= a_left_type
-				if not l_formal.is_single_constraint_without_renaming (l_context_current_class) then
-					l_is_multi_constraint_case := True
-						-- this is the multi constraint case
-					l_type_set := a_left_type.to_type_set.constraining_types (l_context_current_class)
-					check l_type_set /= Void end
-					l_result_tuple := l_type_set.feature_i_state_by_alias_name_id (l_name.name_id)
-						-- We raise an error if there are multiple infix features found
-					l_feature_found_count := l_result_tuple.features_found_count
-					if	l_feature_found_count > 1 then
-						l_vtmc_error := new_vtmc_error (l_name, l_formal.position, l_context_current_class, True)
-					elseif l_feature_found_count = 1 then
-						l_infix :=  l_result_tuple.feature_item
-						l_last_constrained := l_result_tuple.class_type_of_feature
-						l_class := l_last_constrained.base_class
-						last_calls_target_type := l_last_constrained
-					else
-						-- Evereything stays void, an error will be reported.
-					end
+				if attached {FORMAL_A} a_left_type as l_formal then
+					if not l_formal.is_single_constraint_without_renaming (l_context_current_class) then
+						l_is_multi_constraint_case := True
+							-- this is the multi constraint case
+						l_type_set := a_left_type.to_type_set.constraining_types (l_context_current_class)
+						check l_type_set /= Void end
+						l_result_tuple := l_type_set.feature_i_state_by_alias_name_id (l_name.name_id)
+							-- We raise an error if there are multiple infix features found
+						l_feature_found_count := l_result_tuple.features_found_count
+						if	l_feature_found_count > 1 then
+							l_vtmc_error := new_vtmc_error (l_name, l_formal.position, l_context_current_class, True)
+						elseif l_feature_found_count = 1 then
+							l_infix :=  l_result_tuple.feature_item
+							l_last_constrained := l_result_tuple.class_type_of_feature
+							l_class := l_last_constrained.base_class
+							last_calls_target_type := l_last_constrained
+						else
+							-- Evereything stays void, an error will be reported.
+						end
 
+					else
+						l_last_constrained := l_formal.constrained_type (l_context_current_class)
+					end
 				else
-					l_last_constrained := l_formal.constrained_type (l_context_current_class)
+					check is_formal: False end
+					l_last_constrained := a_left_type
 				end
 			else
 				l_last_constrained := a_left_type
@@ -9595,7 +9592,7 @@ feature {NONE} -- Implementation
 			l_vape: VAPE
 			l_vwoe1: VWOE1
 		do
-			if not (context.is_ignoring_export or a_feature.is_exported_for (a_context_class)) then
+			if not (context.is_ignoring_export or a_feature.is_exported_for (context.current_class)) then
 				create l_vuex
 				context.init_error (l_vuex)
 				l_vuex.set_static_class (a_context_class)
@@ -9652,7 +9649,7 @@ feature {NONE} -- Implementation
 			l_vuex: VUEX
 			l_vape: VAPE
 		do
-			if not (context.is_ignoring_export or a_feature.is_exported_for (a_context_class)) then
+			if not (context.is_ignoring_export or a_feature.is_exported_for (context.current_class)) then
 				create l_vuex
 				context.init_error (l_vuex)
 				l_vuex.set_static_class (a_context_class)
@@ -11148,91 +11145,27 @@ feature {NONE} -- Implementation: type validation
 			adapated_type_not_void: Result /= Void
 		end
 
-	upper_type (x, y: TYPE_A): detachable TYPE_A
-			-- A type that is computed as a tripple for tripples <xc, xa, xs> and <yc, ya, ys> corresponding to `x` and `y` as follows:
-			-- • xc, yc - marks free types, using only class conformance rules
-			-- • xa, ya - attachment status
-			-- • xs, ys - separateness status
-			-- The resulting type is <zc, za, zs> where
-			-- • zc = xc if yc -> xc, zc = yc if xc -> yc, zc = Void otherwise
-			-- • za = attached , if xa or ya is attached, detachable otherwise
-			-- • zs = separate, if xs or ys is separate, non-separate otherwise
-		local
-			rx, ry: TYPE_A
-		do
-			if y.is_attached or else y.is_implicitly_attached and then not x.is_attached then
-					-- `x` is less attached, use its attachment status.
-				rx := x
-				ry := y.to_other_immediate_attachment (x)
-			else
-					-- `y` is less attached, use its attachment status.
-				rx := x.to_other_immediate_attachment (y)
-				ry := y
-			end
-				-- Source types should conform to the computed ones.
-			check
-				x_conforms_to_rx: x.conform_to (context.current_class, rx)
-				y_conforms_to_ry: y.conform_to (context.current_class, ry)
-			end
-			if rx.is_separate then
-					-- Use `x` separateness status.
-				ry := ry.to_other_separateness (rx)
-			else
-					-- Use `y` separateness status.
-				rx := rx.to_other_separateness (ry)
-			end
-				-- Source types should conform to the computed ones.
-			check
-				x_conforms_to_rx: x.conform_to (context.current_class, rx)
-				y_conforms_to_ry: y.conform_to (context.current_class, ry)
-			end
-				-- Use the type to which both `x` and `y` conform.
-			if x.conform_to (context.current_class, ry) then
-				Result := ry
-			elseif y.conform_to (context.current_class, rx) then
-				Result := rx
-			end
-		ensure
-			x_conforms_to_Result: attached Result implies x.conform_to (context.current_class, Result)
-			y_conforms_to_Result: attached Result implies y.conform_to (context.current_class, Result)
-		end
-
 	maximal_type (ts: ARRAYED_LIST [TYPE_A]): TYPE_A
 			-- A type that is maximal in the list `ts`, if present, or a properly adapted version of "ANY".
 		local
-			t: TYPE_A
-			i, j, n: INTEGER
+			c: CLASS_C
+			l: LOCAL_TYPE_A
 		do
-				-- Use "(attached) NONE" as the initial lowest type, it conforms to any other type.
-			Result := none_type.as_normally_attached (context.current_class)
-			from
-				n := ts.count
-			until
-				i >= n
+			c := context.current_class
+				-- Use `l` to collect type information about all types.
+			create l.make (0, System.detachable_separate_any_type, c)
+				-- Iterate over all types.
+			across
+				ts as t
 			loop
-				i := i + 1
-				t := ts [i]
-				if attached upper_type (t, Result) as x then
-					Result := x
-				else
-					if i >= n or else j >= n then
-							-- Cannot find a common type, use "(attached) ANY".
-						Result := system.any_type.as_normally_attached (context.current_class)
-					else
-							-- Start over from the next unprocessed element type as the initial one.
-						if i > j then
-							j := i + 1
-						else
-							j := j + 1
-						end
-						Result := ts [j]
-					end
-						-- Recheck with the new type, adapting it if necessary.
-					i := 0
-				end
+					-- Mimic attachment of `t.item` to a local of type `l`.
+				l.backward_conform_to (c, t.item).do_nothing
 			end
-		ensure
-			types_conform_to_result: across ts as x all x.item.conform_to (context.current_class, Result) end
+				-- Obtain a type to which all elements conform.
+			Result := l.minimum
+				-- There is no restriction on the type to which the found type should conform.
+				-- Therefore, the type always exists.
+			check attached Result end
 		end
 
 feature {NONE} -- Implementation: checking locals
@@ -12147,7 +12080,7 @@ feature {INSPECT_CONTROL} -- Checks for obsolete features
 					-- Or of a creation instruction.
 				and then not is_target_of_creation_instruction
 			then
-				report (f, c, current_feature, context.current_class, l, context.current_class.is_warning_enabled (w_obsolete_feature))
+				report (f, c, current_feature, context.current_class, l, context.current_class.obsolete_call_warning_index)
 			end
 		end
 

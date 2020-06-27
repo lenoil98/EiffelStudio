@@ -20,6 +20,9 @@ inherit
 	SHARED_SERVER
 		export {NONE} all end
 
+	INTERNAL_COMPILER_STRING_EXPORTER
+		export {NONE} all end
+
 feature -- Access
 
 	type: CL_TYPE_A
@@ -68,8 +71,12 @@ feature -- Basic operations
 				-- Add actual generic parameters
 			if a_type.has_generics then
 				across a_type.generics as params loop
-					check attached {CL_TYPE_A} params.item as t then
+					if attached {CL_TYPE_A} params.item as t then
 						translation_pool.add_parent_type (t)
+					elseif attached {CL_TYPE_A} a_type.base_class.single_constraint (params.target_index) as t then
+						translation_pool.add_parent_type (t)
+					else
+						check class_type_constraint: False then end
 					end
 				end
 			end
@@ -117,8 +124,8 @@ feature -- Basic operations
 				across
 					helper.model_queries (l_class) as m
 				loop
-					if a_type.base_class.feature_named_32 (m.item) = Void then
-						helper.add_semantic_error (l_class, messages.unknown_attribute (m.item, l_class.name_in_upper), -1)
+					if a_type.base_class.feature_named (m.item) = Void then
+						helper.add_semantic_error (l_class, messages.unknown_attribute ({UTF_CONVERTER}.utf_8_string_8_to_string_32 (m.item), l_class.name_in_upper), -1)
 					end
 				end
 				generate_model_axiom
@@ -136,18 +143,19 @@ feature -- Basic operations
 			l_class := type.base_class
 
 			if not helper.is_class_logical (l_class) and not helper.is_class_array (l_class) then
+				helper.set_up_byte_context (l_class.invariant_feature, a_type)
 				translate_invariant_function
 
 				-- Add guards for built-in attributes (ANY versions)
 				-- (required to know the lower bound on guards of unknown types)
-				translation_pool.add_referenced_feature (system.any_type.base_class.feature_named_32 ("owns"), system.any_type)
-				translation_pool.add_referenced_feature (system.any_type.base_class.feature_named_32 ("subjects"), system.any_type)
-				translation_pool.add_referenced_feature (system.any_type.base_class.feature_named_32 ("observers"), system.any_type)
+				translation_pool.add_referenced_feature (system.any_type.base_class.feature_named ("owns"), system.any_type)
+				translation_pool.add_referenced_feature (system.any_type.base_class.feature_named ("subjects"), system.any_type)
+				translation_pool.add_referenced_feature (system.any_type.base_class.feature_named ("observers"), system.any_type)
 
 				-- Add guards for built-in attributes
-				translation_pool.add_referenced_feature (l_class.feature_named_32 ("owns"), type)
-				translation_pool.add_referenced_feature (l_class.feature_named_32 ("subjects"), type)
-				translation_pool.add_referenced_feature (l_class.feature_named_32 ("observers"), type)
+				translation_pool.add_referenced_feature (l_class.feature_named ("owns"), type)
+				translation_pool.add_referenced_feature (l_class.feature_named ("subjects"), type)
+				translation_pool.add_referenced_feature (l_class.feature_named ("observers"), type)
 			end
 		end
 
@@ -163,13 +171,13 @@ feature -- Basic operations
 			generate_filtered_invariant_axiom (a_included, a_excluded, a_ancestor)
 		end
 
-	translate_inline_invaraint_check (a_type: CL_TYPE_A; a_target: IV_EXPRESSION)
+	translate_inline_invariant_check (a_type: CL_TYPE_A; a_target: IV_EXPRESSION)
 			-- Translate the invariant of `a_type' into assert statements and store them in `last_clauses'.
 		local
 			l_mapping: E2B_ENTITY_MAPPING
 		do
+			helper.switch_byte_context (a_type.base_class.invariant_feature, a_type, a_type)
 			type := a_type
-
 			if a_target.same_expression (factory.std_current) then
 					-- Standard target: use cache
 				if invariant_check_cache.has_key (type) then
@@ -191,6 +199,7 @@ feature -- Basic operations
 				l_mapping.set_current (a_target)
 				generate_invariant_clauses (Void, Void, type.base_class, l_mapping)
 			end
+			helper.unswitch_byte_context
 		end
 
 feature {NONE} -- Implementation
@@ -357,7 +366,7 @@ feature {NONE} -- Implementation
 			add_default_clause ("owns", translation_mapping.default_tags [3], Void, Void, a_mapping)
 		end
 
-	add_default_clause (a_name, a_tag: STRING; a_included, a_excluded: LIST [STRING]; a_mapping: E2B_ENTITY_MAPPING)
+	add_default_clause (a_name, a_tag: READABLE_STRING_8; a_included, a_excluded: LIST [READABLE_STRING_8]; a_mapping: E2B_ENTITY_MAPPING)
 			-- Add default definition for a built-in attrbute `a_name' with tag `a_tag'.
 		local
 			l_clause: IV_ASSERT
@@ -370,11 +379,11 @@ feature {NONE} -- Implementation
 					last_clauses.extend (l_clause)
 				end
 			elseif a_included /= Void and then a_included.has (a_tag) then
-				helper.add_semantic_error (type.base_class, messages.invalid_tag (a_tag, type.base_class.name_in_upper), -1)
+				helper.add_semantic_error (type.base_class, messages.invalid_tag ({UTF_CONVERTER}.utf_8_string_8_to_string_32 (a_tag), type.base_class.name_in_upper), -1)
 			end
 		end
 
-	empty_set_property (a_name: STRING; a_mapping: E2B_ENTITY_MAPPING): IV_EXPRESSION
+	empty_set_property (a_name: READABLE_STRING_8; a_mapping: E2B_ENTITY_MAPPING): IV_EXPRESSION
 		do
 			Result := factory.function_call (
 				"Set#IsEmpty",
@@ -418,7 +427,7 @@ feature {NONE} -- Implementation
 			processed_classes.extend (a_class.class_id)
 		end
 
-	is_tag_included (a_included, a_excluded: LIST [STRING]; a_tag: STRING): BOOLEAN
+	is_tag_included (a_included, a_excluded: LIST [READABLE_STRING_8]; a_tag: READABLE_STRING_8): BOOLEAN
 			-- Should `a_tag' be included into the invariant function according `a_included' and `a_excluded'?
 		do
 			Result := (a_included = Void and a_excluded = Void) or else	-- Processing full invariant
@@ -437,15 +446,17 @@ feature {NONE} -- Implementation
 			l_found: BOOLEAN
 		do
 			if inv_byte_server.has (a_class.class_id) then
-				helper.set_up_byte_context (a_class.invariant_feature, helper.class_type_in_context (a_class.actual_type, a_class, a_class.invariant_feature, type))
+				helper.switch_byte_context (a_class.invariant_feature, helper.class_type_in_context (a_class.actual_type, a_class, a_class.invariant_feature, type), a_class.actual_type)
 				across
 					inv_byte_server.item (a_class.class_id).byte_list as b
 				loop
 					l_assert := b.item
 					if is_tag_included (a_included, a_excluded, l_assert.tag) then
 						create l_translator.make
-						l_translator.copy_entity_mapping (a_mapping)
 						l_translator.set_context (a_class.invariant_feature, type)
+							-- Entity mapping should be copied after setting the context
+							-- because setting the context can also set a mapping for "Current".
+						l_translator.copy_entity_mapping (a_mapping)
 						l_translator.set_origin_class (a_class)
 						l_translator.set_context_line_number (l_assert.line_number)
 						l_translator.set_context_tag (l_assert.tag)
@@ -470,7 +481,7 @@ feature {NONE} -- Implementation
 							until
 								l_found
 							loop
-								if a.item.feature_name_32 /~ "closed" and a.item.feature_name_32 /~ "owner" then
+								if not a.item.feature_name.same_string ("closed") and not a.item.feature_name.same_string ("owner") then
 									l_found := generate_ghost_definition (l_translator.last_expression, a.item)
 								end
 							end
@@ -478,6 +489,7 @@ feature {NONE} -- Implementation
 					end
 					l_assert.process (builtin_collector)
 				end
+				helper.unswitch_byte_context
 			end
 		end
 
@@ -511,7 +523,7 @@ feature {NONE} -- Implementation
 			create l_heap.make ("heap", types.heap)
 
 			l_def := definition_of (a_expr, l_heap, l_current, a_attr)
-			if attached l_def and not helper.is_class_explicit (type.base_class, a_attr.feature_name_32) then
+			if attached l_def and not helper.is_class_explicit (type.base_class, a_attr.feature_name) then
 				l_field := helper.field_from_attribute (a_attr, type)
 				l_fname := name_translator.boogie_function_for_ghost_definition (type, l_field.name)
 				l_function := boogie_universe.function_named (l_fname)
@@ -536,21 +548,25 @@ feature {NONE} -- Implementation
 		local
 			l_type: CL_TYPE_A
 			l_field: IV_ENTITY
-			l_eq: STRING
+			l_eq: READABLE_STRING_8
 		do
 			l_type := helper.class_type_in_context (a_attr.type, type.base_class, type.base_class.invariant_feature, type)
 			l_field := helper.field_from_attribute (a_attr, type)
 			if helper.is_class_logical (l_type.base_class) then
-				l_eq := helper.function_for_logical (l_type.base_class.feature_named_32 ("is_equal"))
-				if attached {IV_FUNCTION_CALL} a_expr as fcall and then
-					fcall.name ~ l_eq and then
-					fcall.arguments [1].same_expression (factory.heap_access (a_heap, a_current, l_field.name, types.field_content_type (l_field.type))) then
+				l_eq := helper.function_for_logical (l_type.base_class.feature_named ("is_equal"))
+				if
+					attached {IV_FUNCTION_CALL} a_expr as fcall and then
+					fcall.name.same_string (l_eq) and then
+					fcall.arguments [1].same_expression (factory.heap_access (a_heap, a_current, l_field.name, types.field_content_type (l_field.type)))
+				then
 					Result := fcall.arguments [2]
 				end
-			elseif attached {IV_BINARY_OPERATION} a_expr as binop and then
-					binop.operator ~ "==" and then
-					binop.left.same_expression (factory.heap_access (a_heap, a_current, l_field.name, types.field_content_type (l_field.type))) then
-					Result := binop.right
+			elseif
+				attached {IV_BINARY_OPERATION} a_expr as binop and then
+				binop.operator.same_string ("==") and then
+				binop.left.same_expression (factory.heap_access (a_heap, a_current, l_field.name, types.field_content_type (l_field.type)))
+			then
+				Result := binop.right
 			end
 		end
 
@@ -702,10 +718,10 @@ feature -- Invariant admissibility
 					create l_error.make (l_failure)
 					l_error.set_boogie_error (i.item)
 					if i.item.attributes["type"] ~ "A2" then
-						l_error.set_message ("Some subjects might not have Current in their observers set.")
+						l_error.set_message ({STRING_32} "Some subjects might not have Current in their observers set.")
 						l_failure.errors.extend (l_error)
 					elseif i.item.attributes["type"] ~ "A3" then
-						l_error.set_message ("The invariant might be invalidated by a subject update that conforms to its guard.")
+						l_error.set_message ({STRING_32} "The invariant might be invalidated by a subject update that conforms to its guard.")
 						l_failure.errors.extend (l_error)
 					else
 						a_result_generator.process_individual_error (i.item, l_failure)

@@ -75,6 +75,8 @@ feature -- Query
 	editor_paste_cmd: EB_EDITOR_PASTE_COMMAND
 			-- Command to paste text in the editor.
 
+	editor_insert_symbol_cmd: EB_INSERT_SYMBOL_EDITOR_COMMAND
+
 	melt_cmd: EB_MELT_PROJECT_COMMAND
 			-- Command to start compilation.
 
@@ -326,6 +328,14 @@ feature {EB_DEVELOPMENT_WINDOW_BUILDER, EB_DEVELOPMENT_WINDOW_TOOLBAR_BUILDER} -
 			editor_paste_cmd := a_cmd
 		ensure
 			set: editor_paste_cmd = a_cmd
+		end
+
+	set_editor_insert_symbol_cmd (a_cmd: like editor_insert_symbol_cmd)
+			-- Set `editor_insert_symbol_cmd'
+		do
+			editor_insert_symbol_cmd := a_cmd
+		ensure
+			set: editor_insert_symbol_cmd = a_cmd
 		end
 
 	set_new_cluster_cmd (a_cmd: like new_cluster_cmd)
@@ -845,7 +855,7 @@ feature -- Recycle
 		end
 
 note
-	copyright:	"Copyright (c) 1984-2018, Eiffel Software"
+	copyright:	"Copyright (c) 1984-2019, Eiffel Software"
 	license:	"GPL version 2 (see http://www.eiffel.com/licensing/gpl.txt)"
 	licensing_options:	"http://www.eiffel.com/licensing"
 	copying: "[

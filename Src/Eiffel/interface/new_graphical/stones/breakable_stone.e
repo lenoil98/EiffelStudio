@@ -146,84 +146,53 @@ feature -- Basic operations
 			end
 
 			create menu
-			create item.make_with_text (Interface_names.m_Breakpoint_index)
-			item.set_text (item.text + index.out)
-			item.select_actions.extend (agent (abp: BREAKPOINT)
-					do
-						if abp /= Void then
-							(create {EV_SHARED_APPLICATION}).ev_application.clipboard.set_text ("bp:" + abp.to_tag_path)
-						end
-					end(bp)
-				)
-			menu.extend (item)
-			menu.extend (create {EV_MENU_SEPARATOR})
 
-				-- "Enable"
-			create item.make_with_text (Interface_names.m_Enable_this_bkpt)
-			item.select_actions.extend (agent bpm.enable_user_breakpoint (routine, index))
-			item.select_actions.extend (agent bpm.notify_breakpoints_changes)
-
-			if bp /= Void and then bp.is_enabled then
-				item.disable_sensitive
+				-- "Enable/Disable"
+			if bp /= Void and then not bp.is_disabled then
+				create item.make_with_text (Interface_names.m_Disable_this_bkpt (index))
+				item.select_actions.extend (agent bpm.disable_user_breakpoint (routine, index))
+				if not bp.is_enabled then
+					item.disable_sensitive
+				end
+			else
+				create item.make_with_text (Interface_names.m_Enable_this_bkpt (index))
+				item.select_actions.extend (agent bpm.enable_user_breakpoint (routine, index))
 			end
-			menu.extend (item)
-
-				-- "Disable"
-			create item.make_with_text (Interface_names.m_Disable_this_bkpt)
-			item.select_actions.extend (agent bpm.disable_user_breakpoint (routine, index))
 			item.select_actions.extend (agent bpm.notify_breakpoints_changes)
-			if bp /= Void and then bp.is_disabled then
-				item.disable_sensitive
-			end
 			menu.extend (item)
 
-			if bp /= Void then
-					-- "Remove"
-				create item.make_with_text (Interface_names.m_Remove_this_bkpt)
-				item.select_actions.extend (agent bpm.remove_user_breakpoint (routine, index))
-				item.select_actions.extend (agent bpm.notify_breakpoints_changes)
+			if bp = Void then
+				menu.extend (create {EV_MENU_SEPARATOR})
+				create item.make_with_text (Interface_names.m_Set_conditional_breakpoint)
+				item.select_actions.extend (agent edit_conditional_breakpoint)
 				menu.extend (item)
-			end
-
-				--| Conditional breakpoint
-			menu.extend (create {EV_MENU_SEPARATOR})
-			if bp /= Void then
+			else
 					-- "Edit"
 				create item.make_with_text (Interface_names.m_Edit_this_bkpt)
 				item.select_actions.extend (agent open_breakpoint_dialog)
 				menu.extend (item)
-			end
 
-			if bp = Void then
-				create item.make_with_text (Interface_names.m_Set_conditional_breakpoint)
-			else
-				create item.make_with_text (Interface_names.m_Edit_condition)
-			end
-			item.select_actions.extend (agent edit_conditional_breakpoint)
-			menu.extend (item)
-
-			if bp /= Void and then bp.has_condition then
-				create item.make_with_text (Interface_names.m_Remove_condition)
-				item.select_actions.extend (agent bp.remove_condition)
-				item.select_actions.extend (agent bpm.notify_breakpoints_changes)
-				menu.extend (item)
-			end
-
-			if bp /= Void then
 				menu.extend (create {EV_MENU_SEPARATOR})
 
-					--| Hit count
-				create cmi.make_with_text (Interface_names.m_Hit_count)
-				cmi.select_actions.extend (agent edit_hit_count_breakpoint)
-				if bp.has_hit_count_condition then
+				create cmi.make_with_text (Interface_names.m_Breakpoint_condition)
+				if bp.has_condition then
 					cmi.enable_select
 				end
+				cmi.select_actions.extend (agent edit_conditional_breakpoint)
 				menu.extend (cmi)
 
 					--| When hits breakpoint
 				create cmi.make_with_text (Interface_names.m_When_hits)
 				cmi.select_actions.extend (agent edit_when_hits_breakpoint)
 				if bp.has_when_hits_action then
+					cmi.enable_select
+				end
+				menu.extend (cmi)
+
+					--| Hit count
+				create cmi.make_with_text (Interface_names.m_Hit_count_with_value (bp.hits_count))
+				cmi.select_actions.extend (agent edit_hit_count_breakpoint)
+				if bp.has_hit_count_condition then
 					cmi.enable_select
 				end
 				menu.extend (cmi)
@@ -420,7 +389,7 @@ feature {NONE} -- Internationalization
 	e_break_point_in: STRING = "Breakpoint in "
 
 note
-	copyright:	"Copyright (c) 1984-2018, Eiffel Software"
+	copyright:	"Copyright (c) 1984-2019, Eiffel Software"
 	license:	"GPL version 2 (see http://www.eiffel.com/licensing/gpl.txt)"
 	licensing_options:	"http://www.eiffel.com/licensing"
 	copying: "[

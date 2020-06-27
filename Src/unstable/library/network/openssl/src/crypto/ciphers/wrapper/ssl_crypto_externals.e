@@ -656,7 +656,7 @@ feature -- RSA
 				BIO *kbio;
 				RSA *rsa = NULL;
 				kbio = BIO_new_mem_buf((void*)(const char *)$a_key_buffer, -1);
-				rsa = PEM_read_bio_RSAPrivateKey(kbio, &rsa, NULL, NULL);
+				rsa = PEM_read_bio_RSAPrivateKey(kbio, NULL, 0, NULL);
 				BIO_free(kbio);
 				return rsa;
 			]"
@@ -671,7 +671,7 @@ feature -- RSA
 				BIO *kbio;
 				RSA *rsa = NULL;
 				kbio = BIO_new_mem_buf((void*)(const char *)$a_key_buffer, -1);
-				rsa = PEM_read_bio_RSA_PUBKEY(kbio, &rsa, NULL, NULL);
+				rsa = PEM_read_bio_RSA_PUBKEY(kbio, NULL, 0, NULL);
 				BIO_free(kbio);
 				return rsa;
 			]"
@@ -837,6 +837,9 @@ feature -- OpenSSL base64 encoding.
 				b64 = BIO_new(BIO_f_base64());
 				bio = BIO_new(BIO_s_mem());
 				bio = BIO_push(b64, bio);
+				
+				BIO_set_flags(bio, BIO_FLAGS_BASE64_NO_NL); //Ignore newlines - write everything in one line
+				
 				BIO_write(bio, $buffer, $length);
 				BIO_flush(bio);
 				BIO_get_mem_ptr(bio, &bufferPtr);
@@ -847,7 +850,7 @@ feature -- OpenSSL base64 encoding.
 		end
 
 note
-	copyright: "Copyright (c) 1984-2018, Eiffel Software and others"
+	copyright: "Copyright (c) 1984-2019, Eiffel Software and others"
 	license: "Eiffel Forum License v2 (see http://www.eiffel.com/licensing/forum.txt)"
 	source: "[
 			Eiffel Software

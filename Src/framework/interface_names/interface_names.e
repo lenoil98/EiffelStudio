@@ -213,6 +213,7 @@ feature -- Button texts
 	b_append: STRING_32							do Result := locale.translation("Append") end
 	b_ignore: STRING_32							do Result := locale.translation("Ignore") end
 	b_import: STRING_32							do Result := locale.translation ("Import") end
+	b_insert: STRING_32							do Result := locale.translation ("Insert") end
 
 	b_force_exit: STRING_32						do Result := locale.translation("Force Exit") end
 
@@ -985,14 +986,16 @@ feature -- Menu mnenomics
 	m_Create_new_class: STRING_32		do Result := locale.translation("&New Class...")	end
 	m_Create_new_feature: STRING_32		do Result := locale.translation("New Fea&ture...")	end
 	m_Debug: STRING_32					do Result := locale.translation("E&xecution")	end
-	m_Disable_this_bkpt: STRING_32		do Result := locale.translation("&Disable This Breakpoint")	end
+	m_Disable_this_bkpt (a_index: INTEGER): STRING_32 do Result := locale.formatted_string (locale.translation("&Disable This Breakpoint #$1"), [a_index]) end
 	m_Display_error_help: STRING_32		do Result := locale.translation("Compilation Error &Wizard...")	end
 	m_Display_system_info: STRING_32	do Result := locale.translation("S&ystem Info")	end
 	m_Edit: STRING_32					do Result := locale.translation("&Edit")	end
-	m_Edit_condition: STRING_32			do Result := locale.translation("E&dit Condition")	end
+	m_Breakpoint_condition: STRING_32	do Result := locale.translation("Condition...")	end
+	m_Edit_condition: STRING_32			do Result := locale.translation("E&dit Condition...")	end
+	m_Set_condition: STRING_32			do Result := locale.translation("Set Condition...")	end
 	m_Edit_exported_feature: STRING_32	do Result := locale.translation("&Edit...")	end
 	m_Edit_external_commands: STRING_32	do Result := locale.translation("&External Commands...")	end
-	m_Enable_this_bkpt: STRING_32		do Result := locale.translation("&Enable This Breakpoint")	end
+	m_Enable_this_bkpt (a_index: INTEGER): STRING_32 do Result := locale.formatted_string (locale.translation("&Enable This Breakpoint #$1"), [a_index]) end
 	m_Favorites: STRING_32				do Result := locale.translation("Fav&orites")	end
 	m_Feature_info: STRING_32			do Result := locale.translation("Feat&ure Views")	end
 	m_File: STRING_32					do Result := locale.translation("&File")	end
@@ -1002,8 +1005,17 @@ feature -- Menu mnenomics
 			Result := << locale.translation("Text Generators"), locale.translation("Class Relations"),
 				     locale.translation("Restrictors"), locale.translation("Main Editor Views")>>
 		end
-	m_History: STRING_32					do Result := locale.translation("&Go to")	end
-	m_Hit_count: STRING_32				do Result := locale.translation("Hit Count")	end
+	m_History: STRING_32				do Result := locale.translation("&Go to")	end
+	m_Hit_count: STRING_32				do Result := locale.translation("Hit Count") end
+	m_Hit_count_with_value (nb: INTEGER): STRING_32
+		do
+			if nb = 0 then
+				Result := locale.translation("Hit Count...")
+			else
+				Result := locale.formatted_string (locale.translation ("Hit Count ($1)..."), [nb])
+			end
+		end
+
 	m_Maximize: STRING_32				do Result := locale.translation("Ma&ximize")	end
 	m_Maximize_Editor_Area: STRING_32	do Result := locale.translation("Ma&ximize Editor Area")	end
 	m_Minimize: STRING_32				do Result := locale.translation("Mi&nimize")	end
@@ -1028,12 +1040,11 @@ feature -- Menu mnenomics
 	m_Remove_class_cluster: STRING_32	do Result := locale.translation("&Remove Current Item")	end
 	m_Remove_exported_feature: STRING_32	do Result := locale.translation("&Remove")	end
 	m_Remove_condition: STRING_32		do Result := locale.translation("Remove Condition")	end
-	m_Remove_this_bkpt: STRING_32		do Result := locale.translation("&Remove This Breakpoint")	end
-	m_Edit_this_bkpt: STRING_32			do Result := locale.translation("&Edit This Breakpoint")	end
-	m_Eidt_in_external_editor: STRING_32	do Result := locale.translation("&Edit in External Editor") end
+	m_Edit_this_bkpt: STRING_32 			do Result := locale.translation("&Edit This Breakpoint ...") end
+	m_Edit_in_external_editor: STRING_32	do Result := locale.translation("&Edit in External Editor") end
 	m_Run_to_this_point: STRING_32		do Result := locale.translation("&Run to This Point")	end
 	m_Send_stone_to_context: STRING_32	do Result := locale.translation("S&ynchronize Context Tool")	end
-	m_Set_conditional_breakpoint: STRING_32 do Result := locale.translation("Set &Conditional Breakpoint")	end
+	m_Set_conditional_breakpoint: STRING_32 do Result := locale.translation("Set &Conditional Breakpoint...")	end
 	m_Set_critical_stack_depth: STRING_32 do Result := locale.translation("Overflow &Prevention...")	end
 	m_Set_slice_size: STRING_32			do Result := locale.translation("&Alter size New")	end
 	m_Special: STRING_32					do Result := locale.translation("&Special")	end
@@ -1045,7 +1056,7 @@ feature -- Menu mnenomics
 	f_Restore_tab: STRING_32 				do Result := locale.translation("Open last closed tab")	end
 	m_Restore_tab: STRING_32					do Result := locale.translation("Open last closed tab")	end
 
-	m_When_hits: STRING_32				do Result := locale.translation("When Hits ...")	end
+	m_When_hits: STRING_32				do Result := locale.translation("When Hits...")	end
 
 	m_Window: STRING_32					do Result := locale.translation("&Window")	end
 	m_Refactoring: STRING_32				do Result := locale.translation("&Refactor")	end
@@ -1835,6 +1846,8 @@ feature -- Label texts
 	l_select_viewer: STRING_32 do Result := locale.translation ("Select Viewer") end
 
 	l_When_breakpoint_is_hit: STRING_32	do Result := locale.translation("When the breakpoint is hit:")	end
+	l_copy_breakpoint_location_to_clipboard: STRING_32 do Result := locale.translation("Copy breakpoint location to clipboard.")	end
+
 	l_Which_actions_would_you_like_to_create: STRING_32 do Result := locale.translation ("Which actions would you like to create?") end
 	l_Whole_project: STRING_32			do Result := locale.translation("Whole project")	end
 	l_Whole_word: STRING_32				do Result := locale.translation("Whole word")	end
@@ -2103,7 +2116,7 @@ feature -- Label texts
 	l_class_browser_features: STRING_32 do Result := locale.translation_in_context ("Feature", "eiffelstudio.formatter.column_name")	end
 	l_version_from: STRING_32 do Result := locale.translation("Declared in class")	end
 	l_version_in (a_class: READABLE_STRING_GENERAL): STRING_32 do Result := locale.formatted_string (locale.translation("Version from class $1"), [a_class])	end
-	l_branch (a_bra: INTEGER): STRING_32 do Result := locale.formatted_string (locale.translation("Branch #$1"), [a_bra.out]) end
+	l_branch (a_bra: INTEGER): STRING_32 do Result := locale.formatted_string (locale.translation("Branch #$1"), [a_bra]) end
 	l_version_from_message: STRING_32 do Result := locale.translation(" (version from)")	end
 	l_expand_layer: STRING_32 do Result := locale.translation("Expand selected level(s)")	end
 	l_collapse_layer: STRING_32 do Result := locale.translation("Collapse selected level(s)")	end
@@ -2285,7 +2298,7 @@ feature -- Label texts
 	l_update_manager_estudio_stable_help (a_version_name: READABLE_STRING_GENERAL): STRING_32
 		do
 			Result := locale.formatted_string (locale.translation ("[
-				A newer version of EiffelStudio is available: $1. This is the stable version that superseeds the installed one.
+				A newer version of EiffelStudio is available: $1. This is the stable version that supersedes the installed one.
 					]"), [a_version_name])
 		end
 
@@ -2955,6 +2968,14 @@ feature -- Description texts
 	e_Control_debuggee_object_storage: STRING_32	do Result := locale.translation("Control debuggee object storage")	end
 	e_Operation_succeeded: STRING_32	do Result := locale.translation("Operation succeeded.")	end
 	e_Operation_failed: STRING_32	do Result := locale.translation("Operation failed.") end
+
+	e_Insert_symbol: STRING_32	do Result := locale.translation("Insert symbol") end
+
+	f_insert_symbol: STRING_32 	do Result := locale.translation("Insert Symbol")	end
+
+	m_insert_symbol: STRING_32 	do Result := locale.translation("&Insert Symbol")	end
+
+	b_insert_symbol: STRING_32	do Result := locale.translation("Insert Symbol")	end
 
 feature -- Error
 

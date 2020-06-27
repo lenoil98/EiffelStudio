@@ -5,19 +5,40 @@ class VFAV4_SYNTAX
 
 inherit
 	VFAV_SYNTAX
+		rename
+			make as make_general
+		end
 
 create
 	make
 
 feature -- Access
 
-	subcode: INTEGER = 4;
+	subcode: INTEGER = 4
 			-- Error subcode
+
+feature {NONE} -- Creation
+
+	make (f: ID_AS; a1, a2: STRING_AS)
+			-- Create error object for feature of name `f` with conflicting alias names `a1` and `a2`.
+		require
+			f_attached: attached f
+			a1_attached: attached a1
+			a2_attached: attached a2
+		do
+			set_class (system.current_class)
+			set_feature_name (f.name_32)
+			set_location (a2)
+		ensure
+			class_c_set: class_c /= Void
+			feature_name_set: feature_name.same_string (f.name_32)
+			location_set: line = a2.line and column = a2.column
+		end
 
 note
 	date: "$Date$"
 	revision: "$Revision$"
-	copyright:	"Copyright (c) 1984-2013, Eiffel Software"
+	copyright:	"Copyright (c) 1984-2019, Eiffel Software"
 	license:	"GPL version 2 (see http://www.eiffel.com/licensing/gpl.txt)"
 	licensing_options:	"http://www.eiffel.com/licensing"
 	copying: "[

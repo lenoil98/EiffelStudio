@@ -1,4 +1,2 @@
-Error: alias clause lists a parenthesis alias for a feature without arguments
-  or class has other feature with parenthesis alias.
-What to do: ensure that class has at most one feature with parenthesis alias
-  and that this feature has at least one argument.
+Error: two alias clauses specify the same alias name.
+What to do: ensure that all aliases have different names.

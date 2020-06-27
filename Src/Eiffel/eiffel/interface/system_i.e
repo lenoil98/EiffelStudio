@@ -532,6 +532,8 @@ feature -- Properties
 			character_32_class.compiled_class.record_precompiled_class_in_system
 			string_8_class.compiled_class.record_precompiled_class_in_system
 			string_32_class.compiled_class.record_precompiled_class_in_system
+			immutable_string_8_class.compiled_class.record_precompiled_class_in_system
+			immutable_string_32_class.compiled_class.record_precompiled_class_in_system
 			special_class.compiled_class.record_precompiled_class_in_system
 			pointer_class.compiled_class.record_precompiled_class_in_system
 			array_class.compiled_class.record_precompiled_class_in_system
@@ -2375,6 +2377,8 @@ end
 			character_32_class.compiled_class.mark_class (marked_classes)
 			string_8_class.compiled_class.mark_class (marked_classes)
 			string_32_class.compiled_class.mark_class (marked_classes)
+			immutable_string_8_class.compiled_class.mark_class (marked_classes)
+			immutable_string_32_class.compiled_class.mark_class (marked_classes)
 			special_class.compiled_class.mark_class (marked_classes)
 			pointer_class.compiled_class.mark_class (marked_classes)
 			array_class.compiled_class.mark_class (marked_classes)
@@ -3781,6 +3785,8 @@ feature -- Dead code removal
 			if is_string_class_alive then
 				r.mark_class_alive (string_8_id)
 				r.mark_class_alive (string_32_id)
+				r.mark_class_alive (immutable_string_8_id)
+				r.mark_class_alive (immutable_string_32_id)
 			end
 			if is_array_class_alive then
 				r.mark_class_alive (array_id)
@@ -5837,7 +5843,7 @@ feature {NONE} -- Access: Root creators
 
 feature {INTERNAL_COMPILER_STRING_EXPORTER, TEST_SYSTEM_I} -- Status report: Root creators
 
-	is_explicit_root (a_class_name, a_feature_name: STRING): BOOLEAN
+	is_explicit_root (a_class_name, a_feature_name: READABLE_STRING_8): BOOLEAN
 			-- Has an explicit root been added for given class and feature name.
 			--
 			-- `a_class_name': Class name in which creation procedure is defined
@@ -5845,9 +5851,9 @@ feature {INTERNAL_COMPILER_STRING_EXPORTER, TEST_SYSTEM_I} -- Status report: Roo
 			-- `Result': True if explicit root exists for class and feature name, False otherwise.
 		do
 			Result := explicit_roots.there_exists (
-				agent (a_tuple: TUPLE [clst: STRING_32; clss: STRING; ft: STRING]; a_cl, a_ft: STRING): BOOLEAN
+				agent (a_tuple: TUPLE [clst: STRING_32; clss: STRING; ft: STRING]; a_cl, a_ft: READABLE_STRING_8): BOOLEAN
 					do
-						Result := a_tuple.clss.is_equal (a_cl) and a_tuple.ft.is_equal (a_ft)
+						Result := a_tuple.clss.same_string (a_cl) and a_tuple.ft.same_string (a_ft)
 					end (?, a_class_name, a_feature_name))
 		end
 

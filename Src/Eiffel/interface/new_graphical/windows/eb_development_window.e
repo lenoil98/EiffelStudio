@@ -195,6 +195,49 @@ feature {EB_DEVELOPMENT_WINDOW_BUILDER} -- Initialization
 			set: save_all_cmd = a_cmd
 		end
 
+feature -- DPI handling
+
+	dpi_scaler: EVS_DPI_SCALER
+		do
+			Result := internal_dpi_scaler
+			if Result = Void then
+				create Result.make
+				internal_dpi_scaler := Result
+			end
+		end
+
+	internal_dpi_scaler: detachable like dpi_scaler
+
+	dpi: NATURAL
+			-- Return the dots per inch (dpi) of the monitor
+			-- DPI sizes 96, 120, 144, 192, etc.
+		do
+			Result := dpi_scaler.dpi
+		end
+
+	update_dpi (a_dpi: INTEGER)
+		require
+			a_dpi > 0
+		local
+			l_dpi: NATURAL
+		do
+			if attached {EXECUTION_ENVIRONMENT}.item ("ISE_STUDIO_DPI") as l_forced_dpi and then l_forced_dpi.is_integer then
+				l_dpi := l_forced_dpi.to_natural_32
+				if l_dpi <= 0 then
+					l_dpi := a_dpi.to_natural_32
+				end
+			else
+				l_dpi := a_dpi.to_natural_32
+			end
+			dpi_scaler.update_dpi (l_dpi)
+		end
+
+	scaled_size (a_size: INTEGER): INTEGER
+			-- Scaled size of `a_size`.
+		do
+			Result := dpi_scaler.scaled_size (a_size)
+		end
+
 feature {NONE} -- Clean up
 
 	internal_recycle
@@ -1544,7 +1587,7 @@ feature {EB_WINDOW_MANAGER, EB_DEVELOPMENT_WINDOW_MAIN_BUILDER} -- Window manage
 						-- Only save the size of the window if not maximized,
 						-- since if maximized we know the size of the window, it is
 						-- the size of the screen.
-					development_window_data.save_size_and_dpi (window.dpi, window.width, window.height)
+					development_window_data.save_size_and_dpi (dpi, window.width, window.height)
 				end
 			end
 		end

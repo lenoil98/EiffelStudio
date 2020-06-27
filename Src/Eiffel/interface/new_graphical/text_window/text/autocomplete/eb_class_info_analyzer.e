@@ -3,6 +3,7 @@
 	legal: "See notice at end of class."
 	status: "See notice at end of class."
 	author: "Etienne Amodeo"
+	revised_by: "Alexander Kogtenkov"
 	date: "$Date$"
 	revision: "$Revision$"
 
@@ -417,9 +418,9 @@ feature {NONE}-- Clickable/Editable implementation
 			vn_id: INTEGER
 			td: detachable AST_EIFFEL
 			l_precursor_feat: detachable E_FEATURE
-			l_type: like type_from
+			retried: BOOLEAN
 		do
-			if is_ok_for_completion then
+			if not retried and is_ok_for_completion then
 				initialize_context
 				if attached current_class_c as cl then
 					if
@@ -433,16 +434,15 @@ feature {NONE}-- Clickable/Editable implementation
 						end
 						error := False
 						last_was_constrained := False
-						last_feature := Void
-						is_for_feature := True
-						l_type := type_from (token, line)
-						is_for_feature := False
-						if attached last_feature as feat then
+						if
+							attached feature_and_type_from (token, line) as tu and then
+							attached tu.feat as feat
+						then
 							if token_image_is_same_as_word (token, "precursor") then
 								Result := [feat, Void]
 							else
 								vn := token.wide_image
-								if vn /= Void and then vn.is_case_insensitive_equal (feat.name_32) then
+								if vn /= Void and then vn.is_case_insensitive_equal_general (feat.name_32) then
 									Result := [feat, Void]
 								end
 							end
@@ -460,7 +460,11 @@ feature {NONE}-- Clickable/Editable implementation
 								until
 									l_precursor_feat /= Void
 								loop
-									l_precursor_feat := l_precursors.item.feature_with_rout_id_set (feat.rout_id_set)
+									if attached l_precursors.item as pr then
+										l_precursor_feat := pr.feature_with_rout_id_set (feat.rout_id_set)
+									else
+										check has_precursors_item: False end
+									end
 								end
 								if l_precursor_feat /= Void then
 									Result := [l_precursor_feat, Void]
@@ -520,6 +524,9 @@ feature {NONE}-- Clickable/Editable implementation
 			end
 		ensure
 			result_with_feat: Result /= Void implies Result.feat /= Void
+		rescue
+			retried := True
+			retry
 		end
 
 	last_feature: E_FEATURE
@@ -544,6 +551,25 @@ feature {NONE} -- Implementation (`type_from')
 			if not error then
 				Result := searched_type
 			end
+		end
+
+	feature_and_type_from (token: EDITOR_TOKEN; line: EDITOR_LINE): TUPLE [feat: E_FEATURE; type: detachable TYPE_A]
+			-- try to analyze class text to find feature associated with word represented by `token'
+		require
+			token_not_void: token /= Void
+			line_not_void: line /= Void
+			token_in_line: line.has_token (token)
+			current_class_c_not_void: current_class_c /= Void
+		local
+			t: TYPE_A
+		do
+			last_feature := Void
+			is_for_feature := True
+			t := type_from (token, line)
+				-- Side effect to get `last_feature`.
+			is_for_feature := False
+			Result := [last_feature, t]
+
 		end
 
 	searched_type: TYPE_A
@@ -1241,6 +1267,24 @@ feature {NONE}-- Implementation
 						-- otherwise, we will not analyze this expression
 					if is_known_infix (exp.item) then
 						infix_list.extend (exp.item.wide_image)
+					elseif token_image_is_same_as_word (exp.item, opening_bracket) then
+							-- if there is a bracket, we fill the new `sub_exp' with what's inside
+						from
+							par_cnt := 1
+							sub_exp.extend (exp.item)
+						until
+							par_cnt = 0 or else exp.after
+						loop
+							exp.forth
+							if not exp.after then
+								sub_exp.extend (exp.item)
+								if token_image_is_same_as_word (exp.item, closing_bracket) then
+									par_cnt := par_cnt - 1
+								elseif token_image_is_same_as_word (exp.item, opening_bracket) then
+									par_cnt := par_cnt + 1
+								end
+							end
+						end
 					else
 						error := True
 					end
@@ -2372,19 +2416,19 @@ feature {EB_COMPLETION_POSSIBILITIES_PROVIDER} -- Constants
 			Result := <<":=", "?=", ";", ",">>
 		end
 
-	infix_groups: LINKED_LIST [ARRAY [STRING]]
+	infix_groups: LINKED_LIST [ARRAY [READABLE_STRING_32]]
 			-- list of operators groups, sorted by priority
 		once
 			create Result.make
-			Result.extend (<<"@">>)
-			Result.extend (<<"^">>)
-			Result.extend (<<"*", "/", "//", "\\">>)
-			Result.extend (<<"+", "-">>)
-			Result.extend (<<"/=", "=", ">", ">=", "<", "<=">>)
-			Result.extend (<<"and">>)
-			Result.extend (<<"xor">>)
-			Result.extend (<<"or">>)
-			Result.extend (<<"implies">>)
+			Result.extend (<<{STRING_32} "@">>)
+			Result.extend (<<{STRING_32} "^">>)
+			Result.extend (<<{STRING_32} "*", {STRING_32} "/", {STRING_32} "//", {STRING_32} "\\">>)
+			Result.extend (<<{STRING_32} "+", {STRING_32} "-">>)
+			Result.extend (<<{STRING_32} "/=", {STRING_32} "=", {STRING_32} ">", {STRING_32} ">=", {STRING_32} "<", {STRING_32} "<=">>)
+			Result.extend (<<{STRING_32} "and">>)
+			Result.extend (<<{STRING_32} "xor">>)
+			Result.extend (<<{STRING_32} "or">>)
+			Result.extend (<<{STRING_32} "implies">>)
 		end
 
 invariant
@@ -2392,7 +2436,7 @@ invariant
 	current_token_in_current_line: (current_line = Void and current_token = Void) or else (current_line /= Void and then current_line.has_token (current_token))
 
 note
-	copyright: "Copyright (c) 1984-2018, Eiffel Software"
+	copyright: "Copyright (c) 1984-2019, Eiffel Software"
 	license:   "GPL version 2 (see http://www.eiffel.com/licensing/gpl.txt)"
 	licensing_options: "http://www.eiffel.com/licensing"
 	copying: "[

@@ -389,9 +389,22 @@ feature -- Status report
 	is_warning_reported_as_error (w: STRING): BOOLEAN
 			-- Should warning `w` be reported as an error?
 		require
-			is_warning_enabled (w)
+			is_warning_enabled (w) or else w.same_string ({CONF_CONSTANTS}.w_obsolete_feature)
 		do
 			Result := lace_class.options.is_warning_as_error
+		end
+
+	obsolete_call_warning_index: like {CONF_OPTION}.warning_term_index_none
+			-- Index of current value of an obsolete feature call warning.
+		do
+			Result :=
+				if lace_class.options.warning.index = {CONF_OPTION}.warning_index_none then
+					{CONF_OPTION}.warning_term_index_none
+				else
+					lace_class.options.warning_obsolete_call.index
+				end
+		ensure
+			{CONF_OPTION}.is_valid_warning_term_index (Result)
 		end
 
 	apply_msil_application_optimizations: BOOLEAN
@@ -2840,7 +2853,14 @@ feature {CLASS_C} -- Incrementality
 		local
 			class_filters: like filters
 			class_filters_cursor: INTEGER
+			base_type: CL_TYPE_A
 		do
+				-- Use the basic type of the supplied class type for instantiation if available.
+			base_type := new_class_type.basic_type
+			if not attached base_type then
+					-- Otherwise, use the regular type of the supplied class type.
+				base_type := new_class_type.type
+			end
 			class_filters := filters
 			from
 				class_filters.start
@@ -2853,7 +2873,10 @@ feature {CLASS_C} -- Incrementality
 					-- we are going to traverse recursively the `filters' list.
 				class_filters_cursor := class_filters.cursor
 					-- Instantiation of the filter with `new_class_type'.
-				if attached {CL_TYPE_A} class_filters.item_for_iteration.instantiation_in (new_class_type.type, class_id) as filter and then not filter.has_formal_generic then
+				if
+					attached {CL_TYPE_A} class_filters.item_for_iteration.instantiation_in (base_type, class_id) as filter and then
+					not filter.has_formal_generic
+				then
 					check
 						has_associated_class: filter.has_associated_class
 					end
@@ -4807,7 +4830,7 @@ feature -- Implementation
 
 feature {INTERNAL_COMPILER_STRING_EXPORTER} -- Querry
 
-	feature_named (n: STRING): FEATURE_I
+	feature_named (n: READABLE_STRING_8): FEATURE_I
 			-- Feature whose internal name is `n'
 		require
 			n_not_void: n /= Void

@@ -12,14 +12,9 @@ create
 
 feature {NONE} -- Creation
 
-	make (a_webapi_url: READABLE_STRING_8)
-		local
-			uri: URI
+	make (cfg: ES_CLOUD_CONFIG)
 		do
-			create uri.make_from_string (a_webapi_url)
-			create root_endpoint.make_from_string (uri.path)
-			uri.set_path ("")
-			create server_url.make_from_string (uri.string)
+			config := cfg
 			initialize
 		end
 
@@ -29,7 +24,7 @@ feature {NONE} -- Creation
 			is_available := False
 			if
 				attached new_http_client_session as sess and then
-				attached response (sess.get (root_endpoint, Void)) as resp
+				attached response (sess.get (config.root_endpoint, Void)) as resp
 			then
 				if not has_error then
 					is_available := True
@@ -61,9 +56,7 @@ feature -- Status report
 
 feature -- Access
 
-	root_endpoint: IMMUTABLE_STRING_8
-
-	server_url: IMMUTABLE_STRING_8
+	config: ES_CLOUD_CONFIG
 
 feature -- Errors
 
@@ -81,6 +74,13 @@ feature -- Errors
 
 	last_error: detachable ES_CLOUD_API_ERROR
 
+feature -- Access from last api call.
+
+	reset_api_call
+		do
+			reset_error
+		end
+
 feature -- Account: register
 
 	register (a_username, a_password: READABLE_STRING_GENERAL; a_email: READABLE_STRING_8; a_additional_values: detachable TABLE_ITERABLE [READABLE_STRING_GENERAL, READABLE_STRING_GENERAL]): detachable ES_ACCOUNT
@@ -89,7 +89,7 @@ feature -- Account: register
 			sess: like new_http_client_session
 			resp: like response
 		do
-			reset_error
+			reset_api_call
 			if attached endpoint ("esa:register") as l_url then
 					-- Using Eiffel support system.
 				sess := new_http_client_session
@@ -116,7 +116,7 @@ feature -- Account: register
 						then
 							create Result.make (a_username)
 							if attached resp.string_8_item ("information") as l_info then
-								debug
+								debug ("es_cloud")
 									print (l_info)
 								end
 							end
@@ -140,7 +140,7 @@ feature -- Account: register
 						then
 							create Result.make (a_username)
 							if attached resp.string_8_item ("information") as l_info then
-								debug
+								debug ("es_cloud")
 									print (l_info)
 								end
 							end
@@ -152,13 +152,13 @@ feature -- Account: register
 
 feature -- ROC Account
 
-	refresh_token (a_token: READABLE_STRING_8; a_refresh_key: READABLE_STRING_8; acc: ES_ACCOUNT)
+	refreshing_token (a_token: READABLE_STRING_8; a_refresh_key: READABLE_STRING_8): detachable ES_ACCOUNT_ACCESS_TOKEN
 		local
 			ctx: HTTP_CLIENT_REQUEST_CONTEXT
 			sess: like new_http_client_session
 			resp: like response
 		do
-			reset_error
+			reset_api_call
 			sess := new_http_client_session
 			if sess /= Void then
 				ctx := new_jwt_auth_context (a_token)
@@ -169,7 +169,7 @@ feature -- ROC Account
 					ctx.add_form_parameter ("refresh", a_refresh_key)
 					resp := response (sess.post (l_jwt_access_token_href, ctx, Void))
 					if not has_error then
-						update_account_with_jwt_access_token_from_response (acc, resp)
+						Result := jwt_token_from_response (resp)
 					end
 				end
 			end
@@ -181,7 +181,7 @@ feature -- ROC Account
 			resp: like response
 			l_account_href: detachable READABLE_STRING_8
 		do
-			reset_error
+			reset_api_call
 			if attached new_http_client_session as sess then
 				l_account_href := es_account_endpoint_for_token (a_token, sess)
 				if l_account_href /= Void then
@@ -207,12 +207,12 @@ feature -- ROC Account
 			resp: like response
 			l_jwt_access_token_href: detachable READABLE_STRING_8
 		do
-			reset_error
+			reset_api_call
 			sess := new_http_client_session
 			if sess /= Void then
 				ctx := new_basic_auth_context (a_username, a_password)
 
-				resp := response (sess.get (root_endpoint, ctx))
+				resp := response (sess.get (config.root_endpoint, ctx))
 				if not has_error then
 					if attached resp.string_8_item ("_links|jwt:access_token|href") as v then
 						l_jwt_access_token_href := v
@@ -233,17 +233,42 @@ feature -- ROC Account
 						elseif attached resp.string_32_item ("user|uid") as s_uid then
 							Result.set_user_id (s_uid.to_integer_64)
 						end
-						update_account_with_jwt_access_token_from_response (Result, resp)
+						if attached jwt_token_from_response (resp) as tok then
+							Result.set_access_token (tok)
+						end
 						check Result.access_token /= Void end
 					end
 				end
 			end
 		end
 
-	logout (a_token: READABLE_STRING_8)
+	discard_token (a_token: READABLE_STRING_8): BOOLEAN
+		local
+			ctx: HTTP_CLIENT_REQUEST_CONTEXT
+			sess: like new_http_client_session
+			resp: like response
 		do
-			-- To implement!
-			reset_error
+			reset_api_call
+			sess := new_http_client_session
+			if sess /= Void then
+				ctx := new_jwt_auth_context (a_token)
+				if attached jwt_access_token_endpoint (sess, ctx) as l_jwt_access_token_href then
+						-- Discard JWT access token
+					ctx.add_form_parameter ("token", a_token)
+					ctx.add_form_parameter ("op", "discard")
+					resp := response (sess.post (l_jwt_access_token_href, ctx, Void))
+					Result := not has_error
+				end
+			end
+		end
+
+	logout (a_token: READABLE_STRING_8; a_installation_id, a_session_id: READABLE_STRING_GENERAL)
+		local
+			b: BOOLEAN
+		do
+			reset_api_call
+			end_session (a_token, a_installation_id, a_session_id)
+			b := discard_token (a_token)
 			endpoints_table_for_tokens := Void
 		end
 
@@ -255,7 +280,7 @@ feature -- Plan
 			resp: like response
 			l_account_href: READABLE_STRING_8
 		do
-			reset_error
+			reset_api_call
 			if
 				attached new_http_client_session as sess
 			then
@@ -281,7 +306,7 @@ feature -- Installation
 			l_installations_href, l_new_installation_href: READABLE_STRING_8
 			j_info: JSON_OBJECT
 		do
-			reset_error
+			reset_api_call
 			if
 				attached new_http_client_session as sess
 			then
@@ -314,13 +339,21 @@ feature -- Installation
 			end
 		end
 
-	ping_installation (a_token: READABLE_STRING_8; a_installation_id: READABLE_STRING_8)
+	begin_session (a_token: READABLE_STRING_8; a_installation_id, a_session_id: READABLE_STRING_8)
+		local
+			d: ES_CLOUD_PING_DATA
+		do
+			create d
+			ping_installation (a_token, a_installation_id, a_session_id, Void, d)
+		end
+
+	end_session (a_token: READABLE_STRING_8; a_installation_id, a_session_id: READABLE_STRING_GENERAL)
 		local
 			ctx: HTTP_CLIENT_REQUEST_CONTEXT
 			resp: like response
 			l_installations_href: READABLE_STRING_8
 		do
-			reset_error
+			reset_api_call
 			if
 				attached new_http_client_session as sess
 			then
@@ -328,8 +361,9 @@ feature -- Installation
 
 				l_installations_href := es_account_installations_endpoint_for_token (a_token, sess)
 				if l_installations_href /= Void then
-					ctx.add_form_parameter ("operation", "ping")
+					ctx.add_form_parameter ("operation", "end_session")
 					ctx.add_form_parameter ("installation_id", a_installation_id)
+					ctx.add_form_parameter ("session_id", a_session_id)
 					resp := response (sess.post (l_installations_href, ctx, Void))
 					if has_error then
 							-- Too bad, but not critical
@@ -339,15 +373,127 @@ feature -- Installation
 			end
 		end
 
+	pause_session (a_token: READABLE_STRING_8; a_installation_id, a_session_id: READABLE_STRING_GENERAL)
+		local
+			ctx: HTTP_CLIENT_REQUEST_CONTEXT
+			resp: like response
+			l_installations_href: READABLE_STRING_8
+		do
+			reset_api_call
+			if
+				attached new_http_client_session as sess
+			then
+				ctx := new_jwt_auth_context (a_token)
+
+				l_installations_href := es_account_installations_endpoint_for_token (a_token, sess)
+				if l_installations_href /= Void then
+					ctx.add_form_parameter ("operation", "pause_session")
+					ctx.add_form_parameter ("installation_id", a_installation_id)
+					ctx.add_form_parameter ("session_id", a_session_id)
+					resp := response (sess.post (l_installations_href, ctx, Void))
+					if has_error then
+							-- Too bad, but not critical
+						reset_error
+					end
+				end
+			end
+		end
+
+	resume_session (a_token: READABLE_STRING_8; a_installation_id, a_session_id: READABLE_STRING_GENERAL)
+		local
+			ctx: HTTP_CLIENT_REQUEST_CONTEXT
+			resp: like response
+			l_installations_href: READABLE_STRING_8
+		do
+			reset_api_call
+			if
+				attached new_http_client_session as sess
+			then
+				ctx := new_jwt_auth_context (a_token)
+
+				l_installations_href := es_account_installations_endpoint_for_token (a_token, sess)
+				if l_installations_href /= Void then
+					ctx.add_form_parameter ("operation", "resume_session")
+					ctx.add_form_parameter ("installation_id", a_installation_id)
+					ctx.add_form_parameter ("session_id", a_session_id)
+					resp := response (sess.post (l_installations_href, ctx, Void))
+					if has_error then
+							-- Too bad, but not critical
+						reset_error
+					end
+				end
+			end
+		end
+
+	ping_installation (a_token: READABLE_STRING_8; a_installation_id, a_session_id: READABLE_STRING_GENERAL;
+			a_opts: detachable STRING_TABLE [READABLE_STRING_GENERAL];
+			a_output: detachable ES_CLOUD_PING_DATA)
+		local
+			ctx: HTTP_CLIENT_REQUEST_CONTEXT
+			resp: like response
+			l_installations_href: READABLE_STRING_8
+		do
+				-- reset previous call data
+			reset_api_call
+			if
+				attached new_http_client_session as sess
+			then
+				ctx := new_jwt_auth_context (a_token)
+
+				l_installations_href := es_account_installations_endpoint_for_token (a_token, sess)
+				if l_installations_href /= Void then
+					ctx.add_form_parameter ("operation", "ping")
+					ctx.add_form_parameter ("installation_id", a_installation_id)
+					ctx.add_form_parameter ("session_id", a_session_id)
+					if a_opts /= Void then
+						across
+							a_opts as ic
+						loop
+							ctx.add_form_parameter (ic.key, ic.item)
+						end
+					end
+					resp := response (sess.post (l_installations_href, ctx, Void))
+					if resp.has_error then
+						if a_output /= Void then
+							a_output.has_error := True
+						end
+							-- Too bad, but not critical
+						reset_error
+					else
+						if attached resp.string_8_item ("_links|es:installation|href") as v then
+							record_endpoint_for_token (a_token, {STRING_32} "_links|es:installation|href;installation=" + a_installation_id.as_string_32, v)
+						end
+						if attached resp.string_8_item ("_links|es:session|href") as v then
+							record_endpoint_for_token (a_token, {STRING_32} "_links|es:session|href;session=" + a_session_id.as_string_32, v)
+						end
+						if a_output /= Void then
+							if
+								attached resp.string_32_item ("es:session_state") as l_sess_state and then
+								not l_sess_state.is_case_insensitive_equal_general ("normal")
+							then
+								a_output.session_state_changed := True
+								a_output.session_state := l_sess_state
+							end
+							if attached resp.integer_64_item ("es:session_heartbeat") as l_heartbeat then
+								a_output.heartbeat := l_heartbeat.to_natural_32
+							end
+						end
+					end
+				end
+			end
+		rescue
+			reset_error
+		end
+
 	installation (a_token: READABLE_STRING_8; a_installation_id: READABLE_STRING_GENERAL): detachable ES_ACCOUNT_INSTALLATION
 		local
 			l_installation_href: READABLE_STRING_8
 			ctx: HTTP_CLIENT_REQUEST_CONTEXT
 			resp: like response
 		do
+			reset_api_call
 			l_installation_href := endpoint_for_token (a_token, {STRING_32} "_links|es:installation|href;installation=" + a_installation_id.as_string_32)
 			if l_installation_href /= Void then
-				reset_error
 				if
 					attached new_http_client_session as sess
 				then
@@ -372,6 +518,40 @@ feature -- Installation
 			end
 		end
 
+	session (acc: ES_ACCOUNT; a_installation: ES_ACCOUNT_INSTALLATION; a_session_id: READABLE_STRING_GENERAL): detachable ES_ACCOUNT_SESSION
+		local
+			l_installation_href, l_session_href: READABLE_STRING_8
+			ctx: HTTP_CLIENT_REQUEST_CONTEXT
+			resp: like response
+		do
+			reset_api_call
+				-- Update endpoints ...
+			if a_installation /= Void then
+				ping_installation (acc.access_token.token, a_installation.id, a_session_id, Void, Void)
+			end
+			reset_api_call
+
+			l_session_href := endpoint_for_token (acc.access_token.token, {STRING_32} "_links|es:session|href;session=" + a_session_id.as_string_32)
+			if l_session_href = Void then
+				l_installation_href := endpoint_for_token (acc.access_token.token, {STRING_32} "_links|es:installation|href;installation=" + a_installation.id.as_string_32)
+				if l_installation_href /= Void then
+					l_session_href := l_installation_href + "/session/" + a_session_id
+				end
+			end
+			if l_session_href /= Void then
+				if
+					attached new_http_client_session as sess
+				then
+					ctx := new_jwt_auth_context (acc.access_token.token)
+
+					resp := response (sess.get (l_session_href, ctx))
+					if not has_error then
+						Result := session_from_response (acc, resp)
+					end
+				end
+			end
+		end
+
 	installations (a_token: READABLE_STRING_8): detachable LIST [ES_ACCOUNT_INSTALLATION]
 		local
 			ctx: HTTP_CLIENT_REQUEST_CONTEXT
@@ -379,7 +559,7 @@ feature -- Installation
 			l_installations_href: READABLE_STRING_8
 			inst: ES_ACCOUNT_INSTALLATION
 		do
-			reset_error
+			reset_api_call
 			if
 				attached new_http_client_session as sess
 			then
@@ -429,7 +609,7 @@ feature {NONE} -- Endpoints
 		do
 			-- Get `is_available` value.
 			if
-				attached response (sess.get (root_endpoint, Void)) as resp
+				attached response (sess.get (config.root_endpoint, Void)) as resp
 			then
 				if has_error then
 					reset_error
@@ -443,7 +623,7 @@ feature {NONE} -- Endpoints
 
 	es_cloud_endpoint (sess: attached like new_http_client_session): detachable IMMUTABLE_STRING_8
 		do
-			reset_error
+			reset_api_call
 			Result := endpoint ("es:cloud")
 			if Result = Void then
 				get_es_cloud_endpoint (sess)
@@ -457,9 +637,10 @@ feature {NONE} -- JWT endpoints
 		local
 			resp: like response
 		do
-			resp := response (sess.get (root_endpoint, ctx))
+			reset_api_call
+			resp := response (sess.get (config.root_endpoint, ctx))
 			if has_error then
-				reset_error
+				reset_api_call
 			else
 				if attached resp.string_8_item ("_links|jwt:access_token|href") as v then
 					Result := v
@@ -520,7 +701,7 @@ feature {NONE} -- Endpoints for token
 			l_es_cloud_href, l_account_href, l_installation_href: detachable READABLE_STRING_8
 			ctx: HTTP_CLIENT_REQUEST_CONTEXT
 		do
-			reset_error
+			reset_api_call
 			l_es_cloud_href := endpoint ("es:cloud")
 			if l_es_cloud_href = Void then
 				get_es_cloud_endpoint (sess)
@@ -576,8 +757,10 @@ feature {NONE} -- Implementation
 			cl: DEFAULT_HTTP_CLIENT
 		do
 			create cl
-			Result := cl.new_session (server_url)
+			Result := cl.new_session (config.server_url)
 			Result.add_header ("Accept", "application/json,text/html;q=0.9,*.*;q=0.8")
+			Result.set_connect_timeout (config.connection_timeout)
+			Result.set_timeout (config.timeout)
 			Result.set_is_insecure (True) -- For now api.eiffel.com has no valid SSL certificate.
 			if not Result.is_available then
 				Result := Void
@@ -647,15 +830,12 @@ feature {NONE} -- Json handling
 			end
 		end
 
-	update_account_with_jwt_access_token_from_response (acc: ES_ACCOUNT; r: ES_CLOUD_API_RESPONSE)
-		local
-			tok: ES_ACCOUNT_ACCESS_TOKEN
+	jwt_token_from_response (resp: like response): detachable ES_ACCOUNT_ACCESS_TOKEN
 		do
-			if attached r.string_8_item ("access_token") as l_access_token then
-				create tok.make (l_access_token)
-				acc.set_access_token (tok)
-				if attached r.string_8_item ("refresh_key") as l_refresh_key then
-					tok.set_refresh_key (l_refresh_key)
+			if attached resp.string_8_item ("access_token") as l_access_token then
+				create Result.make (l_access_token)
+				if attached resp.string_8_item ("refresh_key") as l_refresh_key then
+					Result.set_refresh_key (l_refresh_key)
 				end
 			end
 		end
@@ -680,8 +860,29 @@ feature {NONE} -- Json handling
 			end
 		end
 
+	session_from_response (acc: ES_ACCOUNT; resp: like response): detachable ES_ACCOUNT_SESSION
+		require
+			no_error: not has_error
+		do
+			if attached resp.string_8_item ("es:session|id") as v then
+				create Result.make (acc, v)
+				if
+					attached resp.string_32_item ("es:session|state") as l_state and then
+					l_state.is_case_insensitive_equal_general ("paused")
+				then
+					Result.set_is_paused (True)
+				end
+				if attached resp.string_32_item ("es:session|title") as l_title then
+					Result.set_title (l_title)
+				end
+--				if attached resp.date_time_item ("es:session|first_date") as dt then
+--					Result.set_first_date (dt)
+--				end
+			end
+		end
+
 note
-	copyright: "Copyright (c) 1984-2017, Eiffel Software"
+	copyright: "Copyright (c) 1984-2019, Eiffel Software"
 	license: "GPL version 2 (see http://www.eiffel.com/licensing/gpl.txt)"
 	licensing_options: "http://www.eiffel.com/licensing"
 	copying: "[

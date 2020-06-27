@@ -43,11 +43,10 @@ feature -- Access
 	found: BOOLEAN
 			-- Has last search been successful?
 
-	id_of (s: STRING): INTEGER
+	id_of (s: READABLE_STRING_8): INTEGER
 			-- Id of `s' if inserted, otherwise 0.
 		require
 			s_not_void: s /= Void
-			s_valid_type: s.same_type (string_type)
 		local
 			l_lookup_table: like lookup_table
 		do
@@ -194,7 +193,7 @@ feature {NONE} -- Implementation: access
 	area: SPECIAL [STRING]
 			-- Store string names indexed by their ID.
 
-	lookup_table: HASH_TABLE [INTEGER, STRING]
+	lookup_table: HASH_TABLE [INTEGER, READABLE_STRING_8]
 			-- Hash-table indexed by string names
 			-- Values are indexes of Current to access corresponding
 			-- key in an efficient manner.

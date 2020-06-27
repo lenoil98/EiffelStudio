@@ -9,6 +9,10 @@ deferred class
 
 feature -- Event
 
+	on_session_state_changed (sess: ES_ACCOUNT_SESSION)
+		do
+		end
+
 	on_cloud_available (a_is_available: BOOLEAN)
 		do
 		end
@@ -25,8 +29,13 @@ feature -- Event
 		do
 		end
 
+	on_session_heartbeat_updated (a_new_hearbeat: NATURAL_32)
+			-- New hearbeat expressed in seconds.
+		do
+		end
+
 note
-	copyright: "Copyright (c) 1984-2017, Eiffel Software"
+	copyright: "Copyright (c) 1984-2019, Eiffel Software"
 	license: "GPL version 2 (see http://www.eiffel.com/licensing/gpl.txt)"
 	licensing_options: "http://www.eiffel.com/licensing"
 	copying: "[

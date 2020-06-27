@@ -25,18 +25,26 @@ feature {NONE} -- Router/administration
 			-- <Precursor>
 		local
 			l_root: ES_CLOUD_ROOT_WEBAPI_HANDLER
+			l_plans: ES_CLOUD_PLANS_WEBAPI_HANDLER
 			l_account: ES_CLOUD_ACCOUNT_WEBAPI_HANDLER
+			l_inst_hlr: ES_CLOUD_INSTALLATIONS_WEBAPI_HANDLER
 		do
 			if attached module.es_cloud_api as l_mod_api then
 				create l_root.make (l_mod_api)
 				a_router.handle ("/cloud", l_root, a_router.methods_get)
 					-- FIXME: switch earlier for version. Using WSF_ROUTING_HANDLER.
 				a_router.handle ("/cloud/{version}/", l_root, a_router.methods_get)
+				create l_plans.make (l_mod_api)
+				a_router.handle ("/cloud/{version}/plan/", l_plans, a_router.methods_get)
+				a_router.handle ("/cloud/{version}/plan/{pid}", l_plans, a_router.methods_get)
 				create l_account.make (l_mod_api)
 				a_router.handle ("/cloud/{version}/account/", l_account, a_router.methods_get)
 				a_router.handle ("/cloud/{version}/account/{uid}", l_account, a_router.methods_get)
-				a_router.handle ("/cloud/{version}/account/{uid}/installations", create {ES_CLOUD_INSTALLATIONS_WEBAPI_HANDLER}.make (l_mod_api), a_router.methods_get_post)
-				a_router.handle ("/cloud/{version}/account/{uid}/installations/{installation_id}", create {ES_CLOUD_INSTALLATIONS_WEBAPI_HANDLER}.make (l_mod_api), a_router.methods_get_put_delete)
+				create l_inst_hlr.make (l_mod_api)
+				a_router.handle ("/cloud/{version}/account/{uid}/installations", l_inst_hlr, a_router.methods_get_post)
+				a_router.handle ("/cloud/{version}/account/{uid}/installations/{installation_id}", l_inst_hlr, a_router.methods_get_put_delete)
+				a_router.handle ("/cloud/{version}/account/{uid}/installations/{installation_id}/session/", l_inst_hlr, a_router.methods_get)
+				a_router.handle ("/cloud/{version}/account/{uid}/installations/{installation_id}/session/{session_id}", l_inst_hlr, a_router.methods_get)
 			end
 		end
 
@@ -46,6 +54,7 @@ feature -- Hooks configuration
 			-- Module hooks configuration.
 		do
 			a_hooks.subscribe_to_webapi_response_alter_hook (Current)
+			a_hooks.subscribe_to_hook (module, {STRIPE_HOOK})
 		end
 
 feature -- Hook
